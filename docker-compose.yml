@@ -1,0 +1,26 @@
+services:
+  django:
+    container_name: simple_lms
+    build: .
+    restart: always
+    command: sh -c "until python -c 'import psycopg2; psycopg2.connect(host=\"simple_db\", database=\"simple_lms\", user=\"simple_user\", password=\"simple_password\")' 2>/dev/null; do echo 'Waiting for database...'; sleep 1; done; python manage.py runserver 0.0.0.0:8000"
+    volumes:
+      - ./code:/code
+    ports:
+      - "8001:8000"
+    depends_on:
+      - postgres
+
+  postgres:
+    container_name: simple_db
+    image: postgres:latest
+    restart: always
+    environment:
+      POSTGRES_DB: simple_lms
+      POSTGRES_USER: simple_user
+      POSTGRES_PASSWORD: simple_password
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "5532:5432"
+    volumes:
+      - ./postgres-data:/var/lib/postgresql/data/pgdata
