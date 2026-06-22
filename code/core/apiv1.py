@@ -1,10 +1,18 @@
 from ninja import NinjaAPI, Schema
 from django.contrib.auth.models import User
 from pydantic import validator
+from ninja_simple_jwt.auth.views.api import mobile_auth_router
+from ninja_simple_jwt.auth.ninja_auth import HttpJwtAuth
 import re
 
 # Inisialisasi Django Ninja API
 apiv1 = NinjaAPI()
+
+# Mendaftarkan router untuk login dan refresh token
+apiv1.add_router("/auth/", mobile_auth_router)
+
+# Menginisialisasi JWT Auth Guard
+apiAuth = HttpJwtAuth()
 
 # ----------------------------------------------------
 # 1. Endpoint Basic GET & POST
@@ -117,3 +125,22 @@ def register(request, data: Register):
         last_name=data.last_name
     )
     return newUser
+
+# ----------------------------------------------------
+# 5. Endpoint Terproteksi JWT (Login Required)
+# ----------------------------------------------------
+
+@apiv1.get('mycourses/', auth=apiAuth)
+def getMyCourses(request):
+    user = User.objects.get(pk=request.user.id)
+    return {"message": f"Halo {user.username}, ini adalah daftar course Anda."}
+
+@apiv1.post('course/{id}/enroll/', auth=apiAuth)
+def courseEnrollment(request, id: int):
+    user = User.objects.get(pk=request.user.id)
+    return {"message": f"User {user.username} berhasil mendaftar di course dengan ID {id}"}
+
+@apiv1.post('comments/', auth=apiAuth)
+def postComment(request, comment_text: str):
+    user = User.objects.get(pk=request.user.id)
+    return {"status": "berhasil", "user": user.username, "komentar": comment_text}
