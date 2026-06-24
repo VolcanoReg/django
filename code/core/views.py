@@ -128,3 +128,6 @@ def userStats(request):
         "top_user": top_user_data,
         "users_no_courses": list(without_courses.values('id', 'username', 'email'))
     }, safe=False)
+
+def courses_frontend(request):
+    return render(request, 'courses_list.html')

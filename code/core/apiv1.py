@@ -1,8 +1,14 @@
-from ninja import NinjaAPI, Schema
+from ninja import NinjaAPI, Schema, Query, FilterSchema
 from django.contrib.auth.models import User
-from pydantic import validator
+from pydantic import validator, Field
 from ninja_simple_jwt.auth.views.api import mobile_auth_router
 from ninja_simple_jwt.auth.ninja_auth import HttpJwtAuth
+from ninja.throttling import AnonRateThrottle, AuthRateThrottle
+from ninja.pagination import paginate, PageNumberPagination
+from django.db.models import Q
+from typing import Optional, List
+from datetime import datetime
+from .models import Course
 import re
 
 # Inisialisasi Django Ninja API
@@ -144,3 +150,54 @@ def courseEnrollment(request, id: int):
 def postComment(request, comment_text: str):
     user = User.objects.get(pk=request.user.id)
     return {"status": "berhasil", "user": user.username, "komentar": comment_text}
+
+# ----------------------------------------------------
+# 6. Throttling, Pagination, dan Filtering (Tugas 10)
+# ----------------------------------------------------
+
+class DetailCourseOut(Schema):
+    id: int
+    name: str
+    description: str
+    price: int
+
+class CourseFilter(FilterSchema):
+    price: Optional[int] = None
+    price_gte: Optional[int] = None
+    price_lte: Optional[int] = None
+    created_gte: Optional[datetime] = None
+    created_lte: Optional[datetime] = None
+    search: Optional[str] = Field(None, q=['name__icontains', 'description__icontains'])
+
+    def filter_price(self, value: int):
+        return Q(price=value) if value is not None else Q()
+
+    def filter_price_gte(self, value: int):
+        return Q(price__gte=value) if value is not None else Q()
+
+    def filter_price_lte(self, value: int):
+        return Q(price__lte=value) if value is not None else Q()
+
+    def filter_created_gte(self, value: datetime):
+        return Q(created_at__gte=value) if value is not None else Q()
+
+    def filter_created_lte(self, value: datetime):
+        return Q(created_at__lte=value) if value is not None else Q()
+
+@apiv1.get('courses/', auth=apiAuth, throttle=[AuthRateThrottle('10/m')], response=List[DetailCourseOut])
+@paginate(PageNumberPagination, page_size=5)
+def listAllCourse(request, filters: CourseFilter = Query(...), sort_by: str = 'id', sort_order: str = 'asc'):
+    courses = Course.objects.all()
+    courses = filters.filter(courses)
+    
+    # Implementasi Sorting
+    valid_sort_fields = ['id', 'name', 'price', 'created_at']
+    if sort_by in valid_sort_fields:
+        if sort_order == 'desc':
+            sort_by = f"-{sort_by}"
+        courses = courses.order_by(sort_by)
+    else:
+        courses = courses.order_by('id')
+        
+    return courses
+
