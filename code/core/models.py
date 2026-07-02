@@ -1,15 +1,14 @@
 from django.db import models
-
-# Create your models here.
-from django.db import models
 from django.contrib.auth.models import User
+from django.core.exceptions import ValidationError
 
 class Course(models.Model):
     name = models.CharField("nama matkul", max_length=100)
     description = models.TextField("deskripsi", default='-')
-    price = models.IntegerField("harga", default=10000)
+    price = models.PositiveIntegerField("harga", default=10000)
     image = models.ImageField("gambar", null=True, blank=True)
     teacher = models.ForeignKey(User, verbose_name="pengajar", on_delete=models.RESTRICT)
+    max_students = models.IntegerField(default=100)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -18,7 +17,7 @@ class Course(models.Model):
         verbose_name_plural = 'Mata Kuliah'
 
     def __str__(self):
-        return f"{self.name}: {self.price}"
+        return self.name + ":" + str(self.price)
 
 ROLE_OPTIONS = [('std', 'Siswa'), ('ast', 'Asisten')]
 
@@ -51,7 +50,7 @@ class CourseContent(models.Model):
         verbose_name_plural = 'Konten Matkul'
 
     def __str__(self):
-        return f"[{self.course_id.name}] {self.name}"
+        return "[" + str(self.course_id) + "] " + self.name
 
 class Comment(models.Model):
     content_id = models.ForeignKey(CourseContent, verbose_name="konten", on_delete=models.CASCADE)
@@ -66,3 +65,19 @@ class Comment(models.Model):
 
     def __str__(self):
         return f"Comment by {self.member_id} on {self.content_id}"
+
+class Enrollment(models.Model):
+    course = models.ForeignKey(Course, on_delete=models.CASCADE)
+    student = models.ForeignKey(User, on_delete=models.CASCADE)
+    status = models.CharField(max_length=20, default='pending')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = [['course', 'student']]
+
+    def save(self, *args, **kwargs):
+        # Validasi batas kuota (max_students)
+        current_enrollments = Enrollment.objects.filter(course=self.course).count()
+        if current_enrollments >= self.course.max_students:
+            raise ValidationError("Course is full")
+        super().save(*args, **kwargs)
